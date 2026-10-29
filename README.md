@@ -31,4 +31,6 @@ React, TypeScript, Vite, GSAP, Lenis, WebGL, and Canvas2D. Fonts and media are s
 
 `VIDEO.mp4` preserves the supplied source. The desktop and mobile files in `public/` are seek-friendly derivatives; the atmosphere stills come from the same footage. Media rights remain with their respective owners. No additional media license is granted by this repository.
 
+The app downloads its selected video into a browser-local Blob URL before enabling playback. This keeps manual scrubbing seekable on static hosts that ignore HTTP byte-range requests. The poster remains visible during loading; failed downloads can be retried. Downloads are cancelled and Blob URLs released when replaced or unmounted.
+
 Project design and behavior decisions are documented in `DESIGN.md` and `PRODUCT.md`.

@@ -14,6 +14,7 @@ import { liquidLetterPose } from './liquid-lettering';
 import { wordEffect, overdrivePose, glyphPose } from './word-overdrive';
 import { getFrameTime } from './video-frame';
 import { watchPresentedFrames } from './presented-frame';
+import { loadSeekableVideo } from './seekable-video';
 import './style.css';
 
 type Phase = 'idle' | 'starting' | 'playing' | 'paused' | 'ended';
@@ -34,6 +35,27 @@ function App() {
   const [error, setError] = useState(false);
   const [reduced, setReduced] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [mobileAsset] = useState(() => matchMedia('(max-width: 600px)').matches);
+  const [mediaSource, setMediaSource] = useState<string>();
+  const [mediaAttempt, setMediaAttempt] = useState(0);
+
+  useLayoutEffect(() => {
+    const abort = new AbortController();
+    let objectUrl: string | undefined;
+    setMediaSource(undefined);
+    setReady(false);
+    setError(false);
+    loadSeekableVideo(mobileAsset ? '/film-mobile.mp4' : '/film.mp4', abort.signal)
+      .then(url => {
+        if (abort.signal.aborted) { URL.revokeObjectURL(url); return; }
+        objectUrl = url;
+        setMediaSource(url);
+      })
+      .catch(() => { if (!abort.signal.aborted) setError(true); });
+    return () => {
+      abort.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [mobileAsset, mediaAttempt]);
 
   useLayoutEffect(() => {
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
@@ -355,7 +377,7 @@ function App() {
         <div className="liquid-cinema" aria-hidden="true" />
         <div className="echo-field" aria-hidden="true">{artDirection.map((direction, index) => <span className="film-echo" key={index}>{direction.echo}</span>)}</div>
         <div className="film-window"><div className="film-plane">
-          <video ref={video} className="film" src={mobileAsset ? '/film-mobile.mp4' : '/film.mp4'} poster="/poster.jpg" preload="auto" muted playsInline disablePictureInPicture width="1278" height="720" aria-hidden="true" onLoadStart={() => { setReady(false); setError(false); }} onLoadedData={() => { setReady(true); setError(false); }} onError={() => { setError(true); controller.current?.pause(); }} />
+          <video ref={video} className="film" src={mediaSource} poster="/poster.jpg" preload="auto" muted playsInline disablePictureInPicture width="1278" height="720" aria-hidden="true" onLoadStart={() => { setReady(false); setError(false); }} onLoadedData={() => { setReady(true); setError(false); }} onError={() => { setError(true); controller.current?.pause(); }} />
           <div className="film-shade" aria-hidden="true" />
         </div></div>
         <div className="captions">
@@ -370,7 +392,7 @@ function App() {
           <p>{playError || (phase === 'paused' ? 'Scroll to explore, or resume automatic playback.' : phase === 'ended' ? 'Scroll back to explore, or replay.' : 'Scroll to explore. Or start automatic playback.')}</p>
         </div>}
         {phase === 'playing' && <button className="pause-surface" aria-label="Pause experience" onClick={() => controller.current?.pause()}><span>Pause experience</span></button>}
-        {error && <div className="film-status" role="alert"><p>The film could not load.</p><button onClick={() => { setError(false); setReady(false); video.current?.load(); }}>Try the film again</button></div>}
+        {error && <div className="film-status" role="alert"><p>The film could not load.</p><button onClick={() => setMediaAttempt(attempt => attempt + 1)}>Try the film again</button></div>}
       </div>
     </section>
     <div className="accessible-story"><h1>The Last Paw</h1>{moments.map(scene => <section key={scene.name}><h2>{scene.title.replace('\n', ' ')}</h2>{scene.line && <p>{scene.line}</p>}</section>)}</div>
