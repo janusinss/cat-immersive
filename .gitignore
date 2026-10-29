@@ -1,7 +1,5 @@
 # Local Codex skills, instructions, and workflow artifacts
-/.codex/*
-!/.codex/rules/
-!/.codex/agents/
+/.codex/
 /AGENTS.md
 /scratch/
 /.impeccable/
