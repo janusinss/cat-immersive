@@ -1,0 +1,23 @@
+// The same film changes scale and typographic register as the pursuit unfolds.
+export const artDirection = [
+  { frameX: .84, frameY: .66, echo: '', composition: 'poster' },
+  { frameX: .78, frameY: .68, echo: 'REEDS', composition: 'whisper' },
+  { frameX: 1, frameY: .84, echo: 'ALONE', composition: 'split' },
+  { frameX: 1, frameY: 1, echo: '', composition: 'sweep' },
+  { frameX: 1, frameY: .76, echo: 'LOW', composition: 'split' },
+  { frameX: 1, frameY: 1, echo: '', composition: 'rise' },
+  { frameX: .86, frameY: .78, echo: 'AIR', composition: 'whisper' },
+  { frameX: .78, frameY: .64, echo: 'BREATHE', composition: 'whisper' },
+  { frameX: 1, frameY: 1, echo: '', composition: 'split' },
+  { frameX: .88, frameY: .88, echo: 'REACH', composition: 'vertical' },
+  { frameX: .94, frameY: .8, echo: 'LAND', composition: 'impact' },
+  { frameX: .8, frameY: .72, echo: 'GAP', composition: 'whisper' },
+  { frameX: .88, frameY: 1, echo: '', composition: 'fall' },
+  { frameX: .84, frameY: .66, echo: 'ACROSS', composition: 'horizon' },
+  { frameX: 1, frameY: 1, echo: '', composition: 'split' },
+  { frameX: .94, frameY: .88, echo: 'LEAP', composition: 'rise' },
+  { frameX: .9, frameY: .76, echo: 'STILL', composition: 'impact' },
+  { frameX: .78, frameY: .64, echo: 'RIVER', composition: 'whisper' },
+  { frameX: .84, frameY: .64, echo: 'STILLNESS', composition: 'horizon' },
+  { frameX: .74, frameY: .68, echo: '', composition: 'outro' },
+] as const;

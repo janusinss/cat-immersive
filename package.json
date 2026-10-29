@@ -1,0 +1,27 @@
+{
+  "name": "the-last-paw",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --experimental-strip-types --test src/timeline.test.ts src/art-direction.test.ts src/video-frame.test.ts src/playback.test.ts src/word-motion.test.ts src/liquid-state.test.ts src/liquid-lettering.test.ts src/word-overdrive.test.ts src/presented-frame.test.ts"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "^5.2.0",
+    "@fontsource/dm-sans": "^5.2.0",
+    "gsap": "^3.13.0",
+    "lenis": "^1.3.27",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.1.0"
+  }
+}
