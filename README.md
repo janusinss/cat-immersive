@@ -31,8 +31,8 @@ React, TypeScript, Vite, GSAP, Lenis, WebGL, and Canvas2D. Fonts and media are s
 
 `VIDEO.mp4` preserves the supplied source. The desktop and mobile files in `public/` are seek-friendly derivatives; the atmosphere stills come from the same footage. Media rights remain with their respective owners. No additional media license is granted by this repository.
 
-The app downloads its selected video into a browser-local Blob URL before enabling playback. This keeps manual scrubbing seekable on static hosts that ignore HTTP byte-range requests. The poster remains visible during loading; failed downloads can be retried. Downloads are cancelled and Blob URLs released when replaced or unmounted.
+The app probes HTTP byte-range support and uses native MP4 streaming when available. Hosts that ignore ranges use a browser-local Blob URL to keep manual scrubbing seekable. The poster remains visible during loading; failed downloads can be retried. Downloads are cancelled and Blob URLs released when replaced or unmounted.
 
-Touch devices use native scrolling. Text remains scrollable before video decoding, including with reduced motion enabled. Mobile uses a 640px, 2.94 MB all-intra derivative at the original 24fps and 1x speed. Download progress appears when the host supplies a content length; download and metadata preparation each have a 30-second retry timeout. Metadata enables user-initiated playback without depending on mobile browsers firing `loadeddata`.
+Touch devices use native scrolling. Text remains scrollable before video decoding, including with reduced motion enabled. Mobile uses a 640px, 4.80 MB H.264 Constrained Baseline all-intra derivative at `/film-mobile-v2.mp4` at the original 24fps and 1x speed. Download progress appears when the host supplies a content length; download and metadata preparation each have a 30-second retry timeout. Metadata enables user-initiated playback without depending on mobile browsers firing `loadeddata`.
 
 Project design and behavior decisions are documented in `DESIGN.md` and `PRODUCT.md`.

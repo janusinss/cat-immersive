@@ -14,7 +14,7 @@ import { liquidLetterPose } from './liquid-lettering';
 import { wordEffect, overdrivePose, glyphPose } from './word-overdrive';
 import { getFrameTime } from './video-frame';
 import { watchPresentedFrames } from './presented-frame';
-import { loadSeekableVideo } from './seekable-video';
+import { selectVideoSource } from './seekable-video';
 import { watchMediaReadiness } from './media-readiness';
 import './style.css';
 
@@ -48,11 +48,11 @@ function App() {
     setError(false);
     setDownloadProgress(0);
     const timeout = setTimeout(() => { abort.abort(); setError(true); }, 30_000);
-    loadSeekableVideo(mobileAsset ? '/film-mobile.mp4' : '/film.mp4', abort.signal, setDownloadProgress)
+    selectVideoSource(mobileAsset ? '/film-mobile-v2.mp4' : '/film.mp4', abort.signal, setDownloadProgress)
       .then(url => {
         clearTimeout(timeout);
-        if (abort.signal.aborted) { URL.revokeObjectURL(url); return; }
-        objectUrl = url;
+        if (abort.signal.aborted) { if (url.startsWith('blob:')) URL.revokeObjectURL(url); return; }
+        if (url.startsWith('blob:')) objectUrl = url;
         setMediaSource(url);
       })
       .catch(() => { clearTimeout(timeout); if (!abort.signal.aborted) setError(true); });

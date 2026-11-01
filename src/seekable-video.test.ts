@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadSeekableVideo } from './seekable-video.ts';
+import { loadSeekableVideo, selectVideoSource } from './seekable-video.ts';
 
 async function withMediaMocks(
   response: Response,
@@ -155,5 +155,93 @@ test('streamed video without a content length still reports completion and prese
     assert.ok(progress.every(Number.isFinite));
     assert.equal(blobs[0].type, 'video/webm');
     assert.equal(await blobs[0].text(), 'unmetered-film');
+  });
+});
+
+test('a valid range probe keeps the original URL and cancels its body without creating a Blob URL', { concurrency: false }, async () => {
+  let canceled = false;
+  const body = new ReadableStream<Uint8Array>({ cancel() { canceled = true; } });
+  const response = new Response(body, { status: 206, headers: { 'content-range': 'bytes 0-1/123456', 'content-type': 'video/mp4' } });
+  const controller = new AbortController();
+  await withMediaMocks(response, async ({ requests, blobs }) => {
+    assert.equal(await selectVideoSource('/VIDEO.mp4', controller.signal), '/VIDEO.mp4');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].input, '/VIDEO.mp4');
+    assert.equal(requests[0].init?.signal, controller.signal);
+    assert.equal(requests[0].init?.cache, 'no-cache');
+    assert.equal(new Headers(requests[0].init?.headers).get('range'), 'bytes=0-1');
+    assert.equal(canceled, true);
+    assert.equal(blobs.length, 0);
+  });
+});
+
+test('a host ignoring Range reuses the same full response without a duplicate fetch', { concurrency: false }, async () => {
+  const response = new Response(new Blob(['the-complete-film'], { type: 'video/mp4' }), { status: 200 });
+  await withMediaMocks(response, async ({ requests, blobs }) => {
+    const progress: number[] = [];
+    assert.equal(await selectVideoSource('/VIDEO.mp4', new AbortController().signal, percent => progress.push(percent)), 'blob:test-film');
+    assert.equal(requests.length, 1);
+    assert.equal(blobs.length, 1);
+    assert.equal(blobs[0].type, 'video/mp4');
+    assert.equal(await blobs[0].text(), 'the-complete-film');
+    assert.equal(progress.at(-1), 100);
+    assert.equal(response.bodyUsed, true);
+  });
+});
+
+test('malformed or mismatched 206 content ranges reject without a Blob URL', { concurrency: false }, async () => {
+  for (const contentRange of [null, 'bytes 1-1/100', 'bytes 0-2/100', 'bytes 0-1/0', 'bytes 0-1/*', 'bytes 0-1/01', 'not-a-range']) {
+    const headers = new Headers({ 'content-type': 'video/mp4' });
+    if (contentRange !== null) headers.set('content-range', contentRange);
+    await withMediaMocks(new Response('x', { status: 206, headers }), async ({ blobs, requests }) => {
+      await assert.rejects(selectVideoSource('/VIDEO.mp4', new AbortController().signal));
+      assert.equal(blobs.length, 0);
+      assert.equal(requests.length, 1);
+    });
+  }
+});
+
+test('a failed range probe rejects HTTP 404 without retrying or creating a Blob URL', { concurrency: false }, async () => {
+  await withMediaMocks(new Response('missing', { status: 404 }), async ({ requests, blobs }) => {
+    await assert.rejects(selectVideoSource('/missing.mp4', new AbortController().signal), /404/);
+    assert.equal(requests.length, 1);
+    assert.equal(blobs.length, 0);
+  });
+});
+
+test('a full HTML fallback is rejected by source selection', { concurrency: false }, async () => {
+  const response = new Response('<html>fallback</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  await withMediaMocks(response, async ({ requests, blobs }) => {
+    await assert.rejects(selectVideoSource('/VIDEO.mp4', new AbortController().signal, () => {}), /video file/i);
+    assert.equal(requests.length, 1);
+    assert.equal(blobs.length, 0);
+  });
+});
+
+test('an aborted source selection cannot return a valid range URL', { concurrency: false }, async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const response = new Response('x', { status: 206, headers: { 'content-range': 'bytes 0-1/100' } });
+  await withMediaMocks(response, async ({ blobs }) => {
+    await assert.rejects(selectVideoSource('/VIDEO.mp4', controller.signal), { name: 'AbortError' });
+    assert.equal(blobs.length, 0);
+  });
+});
+
+test('aborting a full-response selection during reading creates no Blob URL', { concurrency: false }, async () => {
+  const controller = new AbortController();
+  const stream = new ReadableStream<Uint8Array>({
+    start(reader) {
+      reader.enqueue(new Uint8Array([1, 2]));
+      reader.enqueue(new Uint8Array([3, 4]));
+      reader.close();
+    },
+  });
+  const response = new Response(stream, { status: 200, headers: { 'content-type': 'video/mp4', 'content-length': '4' } });
+  await withMediaMocks(response, async ({ blobs, requests }) => {
+    await assert.rejects(selectVideoSource('/VIDEO.mp4', controller.signal, () => controller.abort()), { name: 'AbortError' });
+    assert.equal(blobs.length, 0);
+    assert.equal(requests.length, 1);
+    assert.equal(response.body?.locked, false);
   });
 });
