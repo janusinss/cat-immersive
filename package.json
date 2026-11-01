@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test src/timeline.test.ts src/art-direction.test.ts src/video-frame.test.ts src/playback.test.ts src/word-motion.test.ts src/liquid-state.test.ts src/liquid-lettering.test.ts src/word-overdrive.test.ts src/presented-frame.test.ts src/seekable-video.test.ts"
+    "test": "node --experimental-strip-types --test src/timeline.test.ts src/art-direction.test.ts src/video-frame.test.ts src/playback.test.ts src/word-motion.test.ts src/liquid-state.test.ts src/liquid-lettering.test.ts src/word-overdrive.test.ts src/presented-frame.test.ts src/seekable-video.test.ts src/media-readiness.test.ts"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.0",

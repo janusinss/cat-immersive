@@ -15,6 +15,7 @@ import { wordEffect, overdrivePose, glyphPose } from './word-overdrive';
 import { getFrameTime } from './video-frame';
 import { watchPresentedFrames } from './presented-frame';
 import { loadSeekableVideo } from './seekable-video';
+import { watchMediaReadiness } from './media-readiness';
 import './style.css';
 
 type Phase = 'idle' | 'starting' | 'playing' | 'paused' | 'ended';
@@ -37,6 +38,7 @@ function App() {
   const [mobileAsset] = useState(() => matchMedia('(max-width: 600px)').matches);
   const [mediaSource, setMediaSource] = useState<string>();
   const [mediaAttempt, setMediaAttempt] = useState(0);
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   useLayoutEffect(() => {
     const abort = new AbortController();
@@ -44,18 +46,27 @@ function App() {
     setMediaSource(undefined);
     setReady(false);
     setError(false);
-    loadSeekableVideo(mobileAsset ? '/film-mobile.mp4' : '/film.mp4', abort.signal)
+    setDownloadProgress(0);
+    const timeout = setTimeout(() => { abort.abort(); setError(true); }, 30_000);
+    loadSeekableVideo(mobileAsset ? '/film-mobile.mp4' : '/film.mp4', abort.signal, setDownloadProgress)
       .then(url => {
+        clearTimeout(timeout);
         if (abort.signal.aborted) { URL.revokeObjectURL(url); return; }
         objectUrl = url;
         setMediaSource(url);
       })
-      .catch(() => { if (!abort.signal.aborted) setError(true); });
+      .catch(() => { clearTimeout(timeout); if (!abort.signal.aborted) setError(true); });
     return () => {
+      clearTimeout(timeout);
       abort.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [mobileAsset, mediaAttempt]);
+
+  useLayoutEffect(() => {
+    if (!mediaSource || !video.current) return;
+    return watchMediaReadiness(video.current, () => { setReady(true); setError(false); }, () => setError(true));
+  }, [mediaSource]);
 
   useLayoutEffect(() => {
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
@@ -70,7 +81,8 @@ function App() {
     if (!root || !media) return;
 
     // Scroll is the default clock; native playback temporarily takes over on request.
-    const lenis = reduced ? null : new Lenis({ autoRaf: false, smoothWheel: true, lerp: .065, wheelMultiplier: .8 });
+    // Keep browser-native touch momentum; smooth only wheel input on fine pointers.
+    const lenis = reduced || matchMedia('(pointer: coarse)').matches ? null : new Lenis({ autoRaf: false, smoothWheel: true, lerp: .065, wheelMultiplier: .8 });
     let renderPlayback = () => {};
     let renderManual = () => {};
     const tick = (seconds: number) => { lenis?.raf(seconds * 1000); if (phaseRef.current === 'playing') renderPlayback(); else if (phaseRef.current !== 'starting') renderManual(); };
@@ -280,6 +292,7 @@ function App() {
       const position = getPlaybackPosition(media.currentTime, media.duration);
       renderPresented();
       if (lenis) lenis.scrollTo(scrollStart + scrollRange * position.progress, { immediate: true, force: true });
+      else if (!reduced) window.scrollTo(0, scrollStart + scrollRange * position.progress);
     };
     let lastPresentedTime = -1;
     renderPresented = () => {
@@ -294,8 +307,8 @@ function App() {
     let targetFrame = 0;
     let previousMoved = false;
     renderManual = () => {
-      if (reduced && (phaseRef.current === 'paused' || phaseRef.current === 'ended')) return;
       const progress = scrollRange > 0 ? Math.max(0, Math.min(1, (scrollY - scrollStart) / scrollRange)) : 0;
+      if (reduced && (phaseRef.current === 'paused' || phaseRef.current === 'ended') && progress === lastScrollProgress) return;
       targetFrame = getFrameTime(progress * media.duration, media.duration);
       if (progress !== lastScrollProgress) {
         if (phaseRef.current === 'paused' || phaseRef.current === 'ended') changePhase('idle');
@@ -303,8 +316,12 @@ function App() {
         const moved = progress > .025 && progress < .975;
         if (moved !== previousMoved) { previousMoved = moved; setManualMoved(moved); }
       }
-      renderPresented();
-      if (media.readyState >= 2 && !media.seeking && Math.round(media.currentTime * 24) !== Math.round(targetFrame * 24)) media.currentTime = targetFrame;
+      // Keep exploration responsive before the first decoded frame arrives.
+      if (media.readyState < 2) {
+        sequence.progress(progress);
+        liquid?.render(progress * 30.208333, 30.208333);
+      } else renderPresented();
+      if (media.readyState >= 1 && !media.seeking && Math.round(media.currentTime * 24) !== Math.round(targetFrame * 24)) media.currentTime = targetFrame;
     };
     if (reduced && media.currentTime > 0) renderPlayback();
     else renderManual();
@@ -332,7 +349,7 @@ function App() {
         });
       },
     };
-    const ended = () => { renderPlayback(); lastScrollProgress = 1; lenis?.start(); setManualMoved(false); changePhase('ended'); };
+    const ended = () => { renderPlayback(); lastScrollProgress = scrollRange > 0 ? Math.max(0, Math.min(1, (scrollY - scrollStart) / scrollRange)) : 0; lenis?.start(); setManualMoved(false); changePhase('ended'); };
     const paused = () => { if (active && phaseRef.current === 'playing' && !media.ended) pauseExperience(); };
     const takeControl = () => { if (phaseRef.current === 'playing' || phaseRef.current === 'starting') pauseExperience(); };
     const loaded = () => { if (phaseRef.current !== 'playing' && phaseRef.current !== 'starting') { lastScrollProgress = -1; renderManual(); } };
@@ -377,7 +394,7 @@ function App() {
         <div className="liquid-cinema" aria-hidden="true" />
         <div className="echo-field" aria-hidden="true">{artDirection.map((direction, index) => <span className="film-echo" key={index}>{direction.echo}</span>)}</div>
         <div className="film-window"><div className="film-plane">
-          <video ref={video} className="film" src={mediaSource} poster="/poster.jpg" preload="auto" muted playsInline disablePictureInPicture width="1278" height="720" aria-hidden="true" onLoadStart={() => { setReady(false); setError(false); }} onLoadedData={() => { setReady(true); setError(false); }} onError={() => { setError(true); controller.current?.pause(); }} />
+          <video ref={video} className="film" src={mediaSource} poster="/poster.jpg" preload="auto" muted playsInline disablePictureInPicture width="1278" height="720" aria-hidden="true" onError={() => { setError(true); controller.current?.pause(); }} />
           <div className="film-shade" aria-hidden="true" />
         </div></div>
         <div className="captions">
@@ -387,7 +404,7 @@ function App() {
           </article>)}
         </div>
         {!error && phase !== 'playing' && (!manualMoved || phase !== 'idle') && <div className="experience-controls">
-          <button className="start-button" disabled={!ready || phase === 'starting'} onClick={() => controller.current?.play(phase === 'ended')}>{!ready ? 'Preparing the film…' : phase === 'starting' ? 'Starting…' : phase === 'ended' ? 'Replay experience' : phase === 'paused' ? 'Resume experience' : 'Start experience'}</button>
+          <button className="start-button" disabled={!ready || phase === 'starting'} onClick={() => controller.current?.play(phase === 'ended')}>{!ready ? `Preparing the film${downloadProgress > 0 && downloadProgress < 100 ? ` · ${downloadProgress}%` : '…'}` : phase === 'starting' ? 'Starting…' : phase === 'ended' ? 'Replay experience' : phase === 'paused' ? 'Resume experience' : 'Start experience'}</button>
           {phase === 'paused' && ready && <button className="restart-button" onClick={() => controller.current?.play(true)}>Restart</button>}
           <p>{playError || (phase === 'paused' ? 'Scroll to explore, or resume automatic playback.' : phase === 'ended' ? 'Scroll back to explore, or replay.' : 'Scroll to explore. Or start automatic playback.')}</p>
         </div>}

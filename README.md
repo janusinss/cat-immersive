@@ -33,4 +33,6 @@ React, TypeScript, Vite, GSAP, Lenis, WebGL, and Canvas2D. Fonts and media are s
 
 The app downloads its selected video into a browser-local Blob URL before enabling playback. This keeps manual scrubbing seekable on static hosts that ignore HTTP byte-range requests. The poster remains visible during loading; failed downloads can be retried. Downloads are cancelled and Blob URLs released when replaced or unmounted.
 
+Touch devices use native scrolling. Text remains scrollable before video decoding, including with reduced motion enabled. Mobile uses a 640px, 2.94 MB all-intra derivative at the original 24fps and 1x speed. Download progress appears when the host supplies a content length; download and metadata preparation each have a 30-second retry timeout. Metadata enables user-initiated playback without depending on mobile browsers firing `loadeddata`.
+
 Project design and behavior decisions are documented in `DESIGN.md` and `PRODUCT.md`.
