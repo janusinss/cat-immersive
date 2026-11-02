@@ -14,7 +14,6 @@ import { liquidLetterPose } from './liquid-lettering';
 import { wordEffect, overdrivePose, glyphPose } from './word-overdrive';
 import { getFrameTime } from './video-frame';
 import { watchPresentedFrames } from './presented-frame';
-import { selectVideoSource } from './seekable-video';
 import { watchMediaReadiness } from './media-readiness';
 import './style.css';
 
@@ -38,34 +37,17 @@ function App() {
   const [mobileAsset] = useState(() => matchMedia('(max-width: 600px)').matches);
   const [mediaSource, setMediaSource] = useState<string>();
   const [mediaAttempt, setMediaAttempt] = useState(0);
-  const [downloadProgress, setDownloadProgress] = useState(0);
 
   useLayoutEffect(() => {
-    const abort = new AbortController();
-    let objectUrl: string | undefined;
-    setMediaSource(undefined);
     setReady(false);
     setError(false);
-    setDownloadProgress(0);
-    const timeout = setTimeout(() => { abort.abort(); setError(true); }, 30_000);
-    selectVideoSource(mobileAsset ? '/film-mobile-v2.mp4' : '/film.mp4', abort.signal, setDownloadProgress)
-      .then(url => {
-        clearTimeout(timeout);
-        if (abort.signal.aborted) { if (url.startsWith('blob:')) URL.revokeObjectURL(url); return; }
-        if (url.startsWith('blob:')) objectUrl = url;
-        setMediaSource(url);
-      })
-      .catch(() => { clearTimeout(timeout); if (!abort.signal.aborted) setError(true); });
-    return () => {
-      clearTimeout(timeout);
-      abort.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    const prefix = import.meta.env.DEV ? '' : '/media';
+    setMediaSource(`${prefix}/${mobileAsset ? 'film-mobile-v2.mp4' : 'film.mp4'}?v=3&retry=${mediaAttempt}`);
   }, [mobileAsset, mediaAttempt]);
 
   useLayoutEffect(() => {
     if (!mediaSource || !video.current) return;
-    return watchMediaReadiness(video.current, () => { setReady(true); setError(false); }, () => setError(true));
+    return watchMediaReadiness(video.current, () => { setReady(true); setError(false); }, () => { setError(true); controller.current?.pause(); });
   }, [mediaSource]);
 
   useLayoutEffect(() => {
@@ -91,6 +73,7 @@ function App() {
     if (lenis) document.documentElement.dataset.scrollEngine = 'lenis';
     let active = true;
     let command = 0;
+    let playTimer: ReturnType<typeof setTimeout> | undefined;
     const changePhase = (value: Phase) => { phaseRef.current = value; setPhase(value); };
     changePhase(media.currentTime > 0 ? 'paused' : 'idle');
     let pauseExperience = () => {};
@@ -326,6 +309,7 @@ function App() {
     if (reduced && media.currentTime > 0) renderPlayback();
     else renderManual();
     pauseExperience = () => {
+      clearTimeout(playTimer);
       ++command;
       media.pause();
       renderPlayback();
@@ -336,16 +320,23 @@ function App() {
     controller.current = {
       pause: pauseExperience,
       play: (restart = false) => {
+        clearTimeout(playTimer);
         const ticket = ++command;
         setPlayError(null);
         lenis?.stop();
         if (restart || media.ended) { media.currentTime = 0; presentedTime = 0; renderPlayback(); }
         media.playbackRate = 1;
         changePhase('starting');
+        playTimer = setTimeout(() => {
+          if (active && ticket === command) {
+            pauseExperience();
+            setPlayError('The film did not start. Tap resume to retry.');
+          }
+        }, 15_000);
         media.play().then(() => {
-          if (active && ticket === command) changePhase('playing');
+          if (active && ticket === command) { clearTimeout(playTimer); changePhase('playing'); }
         }).catch(() => {
-          if (active && ticket === command) { lenis?.start(); setPlayError('Playback could not start. Please try again.'); changePhase('paused'); }
+          if (active && ticket === command) { clearTimeout(playTimer); lenis?.start(); setPlayError('Playback could not start. Please try again.'); changePhase('paused'); }
         });
       },
     };
@@ -366,6 +357,7 @@ function App() {
     document.addEventListener('visibilitychange', visibility);
     return () => {
       active = false;
+      clearTimeout(playTimer);
       ++command;
       controller.current = null;
       stopFrameClock();
@@ -403,8 +395,8 @@ function App() {
             {scene.line && <p className="scene-note">{scene.line}</p>}
           </article>)}
         </div>
-        {!error && phase !== 'playing' && (!manualMoved || phase !== 'idle') && <div className="experience-controls">
-          <button className="start-button" disabled={!ready || phase === 'starting'} onClick={() => controller.current?.play(phase === 'ended')}>{!ready ? `Preparing the film${downloadProgress > 0 && downloadProgress < 100 ? ` · ${downloadProgress}%` : '…'}` : phase === 'starting' ? 'Starting…' : phase === 'ended' ? 'Replay experience' : phase === 'paused' ? 'Resume experience' : 'Start experience'}</button>
+        {!error && phase !== 'playing' && (!ready || !manualMoved || phase !== 'idle') && <div className="experience-controls">
+          <button className="start-button" disabled={!mediaSource || phase === 'starting'} onClick={() => controller.current?.play(phase === 'ended')}>{phase === 'starting' ? 'Starting…' : !ready ? 'Load and start film' : phase === 'ended' ? 'Replay experience' : phase === 'paused' ? 'Resume experience' : 'Start experience'}</button>
           {phase === 'paused' && ready && <button className="restart-button" onClick={() => controller.current?.play(true)}>Restart</button>}
           <p>{playError || (phase === 'paused' ? 'Scroll to explore, or resume automatic playback.' : phase === 'ended' ? 'Scroll back to explore, or replay.' : 'Scroll to explore. Or start automatic playback.')}</p>
         </div>}

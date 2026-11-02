@@ -21,7 +21,7 @@ npm run build
 npm run preview
 ```
 
-The production site is generated in `dist/`. Serve that folder through a static web host; the current asset URLs expect the site at the domain root.
+The production site is generated in `dist/`. Deploy it to Cloudflare Pages with the included `_worker.js` and `_routes.json`; production video URLs require that worker. `npm run dev` uses direct local media. Plain `vite preview` serves the UI but does not execute the Cloudflare worker.
 
 ## Stack
 
@@ -31,8 +31,8 @@ React, TypeScript, Vite, GSAP, Lenis, WebGL, and Canvas2D. Fonts and media are s
 
 `VIDEO.mp4` preserves the supplied source. The desktop and mobile files in `public/` are seek-friendly derivatives; the atmosphere stills come from the same footage. Media rights remain with their respective owners. No additional media license is granted by this repository.
 
-The app probes HTTP byte-range support and uses native MP4 streaming when available. Hosts that ignore ranges use a browser-local Blob URL to keep manual scrubbing seekable. The poster remains visible during loading; failed downloads can be retried. Downloads are cancelled and Blob URLs released when replaced or unmounted.
+Production uses native MP4 URLs under `/media/`. The Pages worker explicitly returns HTTP 206 with correct byte ranges, even when the underlying static asset ignores Range requests. The browser no longer waits for a JavaScript Blob download. The handler allowlists two film files and buffers at most 20 MiB per request; concurrent range requests increase memory and asset reads.
 
-Touch devices use native scrolling. Text remains scrollable before video decoding, including with reduced motion enabled. Mobile uses a 640px, 4.80 MB H.264 Constrained Baseline all-intra derivative at `/film-mobile-v2.mp4` at the original 24fps and 1x speed. Download progress appears when the host supplies a content length; download and metadata preparation each have a 30-second retry timeout. Metadata enables user-initiated playback without depending on mobile browsers firing `loadeddata`.
+Touch devices use native scrolling. Text remains scrollable before video decoding, including with reduced motion enabled. Mobile uses the 640px H.264 Constrained Baseline film at its original 24fps and 1x speed. The load/start button remains available before metadata to permit a browser-required user gesture. Metadata preparation has a 30-second retry timeout; pending playback has a 15-second recovery timeout.
 
 Project design and behavior decisions are documented in `DESIGN.md` and `PRODUCT.md`.
